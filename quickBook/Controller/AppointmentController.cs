@@ -101,7 +101,7 @@ namespace quickBook.Controllers
             }
         }
         
-        [HttpPost("addAppointmentStatus")]
+        [HttpPut("addAppointmentStatus")]
         public async Task<IActionResult> AddAppointmentStatus()
         {
             if (await _context.AppointmentStatuses.AnyAsync())
@@ -314,8 +314,8 @@ namespace quickBook.Controllers
             return int.Parse(claim.Value);
         }
 
-        [HttpPost("list")]
-        public async Task<IActionResult> GetAppointments([FromBody] AppointmentListRequestDto dto)
+        [HttpGet("list")]
+        public async Task<IActionResult> GetAppointments([FromQuery] AppointmentListRequestDto dto)
         {
             var currentUserId = GetLoggedInUserId();
 
@@ -450,35 +450,157 @@ namespace quickBook.Controllers
         }
 
         private async Task<List<Appointment>> CheckConflictsAsync(
-            int organizerId,
-            DateTime startTime,
-            DateTime endTime,
-            List<int> participantIds,
-            int? excludeAppointmentId = null)
+    	int organizerId,
+    DateTime startTime,
+    DateTime endTime,
+    List<int> participantIds,
+    int? excludeAppointmentId = null)	
+{
+    var usersInvolved = new List<int> { organizerId };
+    usersInvolved.AddRange(participantIds ?? new List<int>());
+
+    // get candidate appointments that involve any of the users
+    var baseAppointments = await _context.Appointments
+        .Where(a => !a.IsCancelled &&
+                    (excludeAppointmentId == null || a.AppointmentId != excludeAppointmentId) &&
+                    (
+                        usersInvolved.Contains(a.OrganizerId) ||
+                        _context.AppointmentParticipants.Any(ap => ap.AppointmentId == a.AppointmentId &&
+                                                                   usersInvolved.Contains(ap.UserId))
+                    ))
+        .Include(a => a.Organizer)
+        .ToListAsync();
+
+    var conflicts = new List<Appointment>();
+    var seen = new HashSet<int>();
+
+    foreach (var appointment in baseAppointments)
+    {
+        if (seen.Contains(appointment.AppointmentId))
+            continue;
+
+        var recurrence = await _context.AppointmentRecurrences
+            .FirstOrDefaultAsync(r => r.AppointmentId == appointment.AppointmentId);
+
+        if (recurrence == null)
         {
-            var usersInvolved = new List<int> { organizerId };
-            usersInvolved.AddRange(participantIds);
-
-            var conflicts = await _context.Appointments
-                .Where(a => !a.IsCancelled &&
-                            (excludeAppointmentId == null || a.AppointmentId != excludeAppointmentId) &&
-                            (
-                                // Organizer is involved
-                                usersInvolved.Contains(a.OrganizerId)
-                                ||
-                                // Any participant is involved
-                                _context.AppointmentParticipants
-                                    .Any(ap => ap.AppointmentId == a.AppointmentId && usersInvolved.Contains(ap.UserId))
-                            ) &&
-                            (
-                                // Time overlap
-                                startTime < a.EndTime && endTime > a.StartTime
-                            ))
-                .Include(a => a.Organizer)
-                .ToListAsync();
-
-            return conflicts;
+            // simple overlap
+            if (startTime < appointment.EndTime && endTime > appointment.StartTime)
+            {
+                conflicts.Add(appointment);
+                seen.Add(appointment.AppointmentId);
+            }
         }
+        else
+        {
+            var duration = appointment.EndTime - appointment.StartTime;
+            var freq = recurrence.Frequency?.Trim().ToLowerInvariant();
+            var interval = Math.Max(1, recurrence.Interval);
+            var occurrenceStart = recurrence.StartDate;
+
+            // weekly: parse custom days
+            List<string>? daysOfWeek = null;
+            if (!string.IsNullOrWhiteSpace(recurrence.DaysOfWeek))
+            {
+                daysOfWeek = JsonSerializer.Deserialize<List<string>>(recurrence.DaysOfWeek);
+            }
+
+            while (occurrenceStart <= endTime &&
+                   (!recurrence.EndDate.HasValue || occurrenceStart <= recurrence.EndDate.Value))
+            {
+                var occurrenceEnd = occurrenceStart + duration;
+
+                // ✅ overlap check
+                if (startTime < occurrenceEnd && endTime > occurrenceStart)
+                {
+                    conflicts.Add(appointment);
+                    seen.Add(appointment.AppointmentId);
+                    break; // no need to check further occurrences for this appointment
+                }
+
+                // ✅ move to next occurrence
+                switch (freq)
+                {
+                    case "daily":
+                        occurrenceStart = occurrenceStart.AddDays(interval);
+                        break;
+
+                    case "weekly":
+                        if (daysOfWeek != null && daysOfWeek.Any())
+                        {
+                            // step one day at a time until next valid weekday
+                            var next = occurrenceStart.AddDays(1);
+                            while (!daysOfWeek.Contains(next.DayOfWeek.ToString(),
+                                       StringComparer.OrdinalIgnoreCase))
+                            {
+                                next = next.AddDays(1);
+                                if (next > endTime) break;
+                            }
+                            occurrenceStart = next;
+                        }
+                        else
+                        {
+                            occurrenceStart = occurrenceStart.AddDays(7 * interval);
+                        }
+                        break;
+
+                    case "monthly":
+                        if (recurrence.DayOfMonth.HasValue)
+                        {
+                            var nextMonth = occurrenceStart.AddMonths(interval);
+                            var daysInMonth = DateTime.DaysInMonth(nextMonth.Year, nextMonth.Month);
+                            var day = Math.Min(recurrence.DayOfMonth.Value, daysInMonth);
+
+                            occurrenceStart = new DateTime(
+                                nextMonth.Year,
+                                nextMonth.Month,
+                                day,
+                                occurrenceStart.Hour,
+                                occurrenceStart.Minute,
+                                occurrenceStart.Second
+                            );
+                        }
+                        else
+                        {
+                            occurrenceStart = occurrenceStart.AddMonths(interval);
+                        }
+                        break;
+
+                    case "yearly":
+                        if (recurrence.MonthOfYear.HasValue && recurrence.DayOfMonth.HasValue)
+                        {
+                            var nextYear = occurrenceStart.Year + interval;
+                            var daysInMonth = DateTime.DaysInMonth(nextYear, recurrence.MonthOfYear.Value);
+                            var day = Math.Min(recurrence.DayOfMonth.Value, daysInMonth);
+
+                            occurrenceStart = new DateTime(
+                                nextYear,
+                                recurrence.MonthOfYear.Value,
+                                day,
+                                occurrenceStart.Hour,
+                                occurrenceStart.Minute,
+                                occurrenceStart.Second
+                            );
+                        }
+                        else
+                        {
+                            occurrenceStart = occurrenceStart.AddYears(interval);
+                        }
+                        break;
+
+                    default:
+                        occurrenceStart = DateTime.MaxValue; // stop
+                        break;
+                }
+            }
+        }
+    }
+
+    return conflicts;
+}
+
+        
+
         
         [HttpPost("check-conflict")]
         public async Task<IActionResult> CheckConflict([FromBody] AppointmentConflictCheckDto dto)
