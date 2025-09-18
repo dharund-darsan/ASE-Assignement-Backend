@@ -51,9 +51,9 @@ namespace quickBook.Mappers
                 EndTime = appointment.EndTime,
                 Status = appointment.Status.Name,
                 StatusColor = appointment.Status.ColorCode,
-                OrganizerName = $"{appointment.Organizer.FirstName} {appointment.Organizer.LastName}",
+                OrganizerId = appointment.Organizer.UserId,
                 Participants = participants
-                    .Select(p => $"{p.FirstName} {p.LastName}")
+                    .Select(p => p.UserId)
                     .ToList()
             };
         }

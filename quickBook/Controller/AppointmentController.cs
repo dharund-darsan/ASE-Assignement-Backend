@@ -242,6 +242,7 @@ namespace quickBook.Controllers
                 appointment.StartTime = dto.StartTime;
                 appointment.EndTime = dto.EndTime;
                 appointment.StatusId = dto.StatusId;
+				appointment.OrganizerId = dto.OrganizerId;
 
                 // ✅ Update participants (clear + re-add)
                 var existingParticipants = _context.AppointmentParticipants

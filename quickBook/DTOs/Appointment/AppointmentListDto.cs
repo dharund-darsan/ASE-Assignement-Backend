@@ -11,7 +11,7 @@
         public DateTime EndTime { get; set; }
         public string Status { get; set; } = string.Empty;
         public string StatusColor { get; set; } = "#000000";
-        public string OrganizerName { get; set; } = string.Empty;
-        public List<string> Participants { get; set; } = new();
+        public int OrganizerId { get; set; } 
+        public List<int> Participants { get; set; } = new();
     }
 }
