@@ -30,9 +30,9 @@ builder.Services.AddCors(options =>
 
 // Register repositories & services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
-builder.Services.AddScoped<AppointmentService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");

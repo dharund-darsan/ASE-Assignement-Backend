@@ -13,5 +13,12 @@
         public string StatusColor { get; set; } = "#000000";
         public int OrganizerId { get; set; } 
         public List<int> Participants { get; set; } = new();
+		public string? Frequency { get; set; }
+    public int? Interval { get; set; }
+    public DateTime? RecurrenceStartDate { get; set; }
+    public DateTime? RecurrenceEndDate { get; set; }
+    public List<string>? DaysOfWeek { get; set; }
+    public int? DayOfMonth { get; set; }
+    public int? MonthOfYear { get; set; }
     }
 }

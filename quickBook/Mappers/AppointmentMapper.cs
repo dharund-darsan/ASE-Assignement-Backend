@@ -1,6 +1,8 @@
 ﻿using quickBook.Models;
 using quickBook.Dtos;
 using quickBook.DTOs;
+using System.Text.Json;
+
 
 namespace quickBook.Mappers
 {
@@ -38,7 +40,7 @@ namespace quickBook.Mappers
             appointment.EndTime = dto.EndTime;
             appointment.StatusId = dto.StatusId;
         }
-        public static AppointmentListDto ToListDto(Appointment appointment, List<User> participants)
+        public static AppointmentListDto ToListDto(Appointment appointment, List<User> participants, AppointmentRecurrence? recurrence = null)
         {
             return new AppointmentListDto
             {
@@ -54,7 +56,16 @@ namespace quickBook.Mappers
                 OrganizerId = appointment.Organizer.UserId,
                 Participants = participants
                     .Select(p => p.UserId)
-                    .ToList()
+                    .ToList(),
+Frequency = recurrence?.Frequency,
+        Interval = recurrence?.Interval,
+        RecurrenceStartDate = recurrence?.StartDate,
+        RecurrenceEndDate = recurrence?.EndDate,
+        DaysOfWeek = !string.IsNullOrEmpty(recurrence?.DaysOfWeek)
+                        ? JsonSerializer.Deserialize<List<string>>(recurrence.DaysOfWeek)
+                        : null,
+        DayOfMonth = recurrence?.DayOfMonth,
+        MonthOfYear = recurrence?.MonthOfYear
             };
         }
     }

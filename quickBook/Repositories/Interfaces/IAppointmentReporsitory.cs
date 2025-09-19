@@ -1,10 +1,15 @@
-﻿using quickBook.Dtos;
-using quickBook.Models;
+﻿using quickBook.Models;
 
 namespace quickBook.Repositories.Interfaces
 {
     public interface IAppointmentRepository
     {
-        Task<ExistenceCheckResultDto> CheckExistenceAsync(int? organizerId, int? statusId, List<int>? participantIds);
+        Task<Appointment?> GetByIdAsync(int appointmentId);
+        Task<List<Appointment>> GetAppointmentsForUserAsync(int userId, DateTime startDate, DateTime endDate);
+        Task AddAsync(Appointment appointment);
+        Task UpdateAsync(Appointment appointment);
+        Task DeleteAsync(Appointment appointment);
+        Task SaveChangesAsync();
+        Task<List<Appointment>> CheckConflictsAsync(int organizerId, DateTime startTime, DateTime endTime, List<int> participantIds, int? excludeAppointmentId = null);
     }
 }

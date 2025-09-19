@@ -372,7 +372,7 @@ namespace quickBook.Controllers
                         // ✅ Overlap check
                         if (occurrenceEnd >= dto.StartDate && occurrenceStart <= dto.EndDate)
                         {
-                            var dtoItem = AppointmentMapper.ToListDto(appointment, participants);
+                            var dtoItem = AppointmentMapper.ToListDto(appointment, participants, recurrence);
                             dtoItem.StartTime = occurrenceStart;
                             dtoItem.EndTime = occurrenceEnd;
                             result.Add(dtoItem);
